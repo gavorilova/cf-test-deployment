@@ -1,0 +1,30 @@
+variables:
+  AWS_REGION:
+    value: "eu-central-1"
+    description: "AWS region"
+  GIT_SSL_NO_VERIFY: "true"
+  STACK_NAME: 
+    value: "test-deployment"
+    description: "stack name"
+  GITLAB_RUL: "http://YOUR_GITLAB.COM"
+  GITLAB_TOKEN: '<YOUR_TOKEN>' #GitLabRegistrationToken
+  DOCKER_IMAGE_RUNNER: 
+    value: "877502699151.dkr.ecr.eu-central-1.amazonaws.com/my-docker-registry:latest"
+    description: "Docker Image"
+  CLUSTER: 
+    value: "sandbox"
+    description: "AWS ECS cluster"
+
+stages:
+  - deploy
+
+Deploy:
+  stage: deploy
+  image: python:3.8
+  before_script:
+    - pip3 install awscli --upgrade
+    - pip3 install aws-sam-cli --upgrade
+  script:
+    - aws configure set region ${AWS_REGION}
+    - sam deploy --template-file template.yml --stack-name $STACK_NAME --capabilities CAPABILITY_NAMED_IAM --region eu-central-1 --parameter-overrides GitLabURL=\"${GITLAB_RUL}\" GitLabRegistrationToken=\"${GITLAB_TOKEN}\" DockerImageRunner=\"${DOCKER_IMAGE_RUNNER}\"
+    - aws ecs run-task --cluster $CLUSTER --task-definition testdeployment --launch-type="FARGATE" --network-configuration 'awsvpcConfiguration={subnets=[subnet-0de88b545a87503b1], assignPublicIp="ENABLED", securityGroups=[sg-0c6eaea57685ba570]}'

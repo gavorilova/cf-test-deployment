@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation my test"
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "GitLab Configuration"
+        Parameters:
+          - GitLabURL
+          - GitLabRegistrationToken
+      -
+        Label:
+          default: "GitLab Runner Configuration"
+        Parameters:
+          - RunnerVersion
+          - InstanceType
+          - RunnerIamRole
+          - DockerImageRunner
+
+Parameters:
+  GitLabURL:
+    Type: String
+    Description: The Gitlab URL, change if self-hosted
+    Default: http://gitlab.com
+  GitLabRegistrationToken:
+    Type: String
+    Description: The Gitlab runer registration token
+    NoEcho: true
+  DockerImageRunner: 
+    Type: "String"
+    Description: "URL to Docker image"
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+  SubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref 'VPC'
+      CidrBlock: '10.0.1.0/24'
+      MapPublicIpOnLaunch: false
+  SubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: {Ref: 'AWS::Region'}
+      VpcId: !Ref 'VPC'
+      CidrBlock: '10.0.2.0/24'
+      MapPublicIpOnLaunch: false
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the ECS containers
+      VpcId: !Ref VPC
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:BatchGetImage"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "s3:*"
+                  - "s3-object-lambda:*"
+                Resource: '*'
+
+  Task:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      TaskRoleArn: "CloudformationTaskArn"
+      Family: "testdeployment"
+      RequiresCompatibilities:
+        - "FARGATE"
+      ExecutionRoleArn: !Ref Role
+      TaskRoleArn: !Ref Role
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: "awsvpc"
+      ContainerDefinitions:
+        - Name: "CloudFormationContainer"
+          Image: !Ref DockerImageRunner
+          MemoryReservation: "256"
+          Memory: "512"
